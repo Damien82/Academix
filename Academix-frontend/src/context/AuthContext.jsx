@@ -1,51 +1,57 @@
-import { createContext, useContext, useState } from "react"
+import { createContext, useContext, useState, useEffect } from "react"
 
 const AuthContext = createContext()
 
-const fakeUsers = [
-  {
-    email: "student@test.com",
-    password: "123456",
-    role: "student",
-    name: "Jean Etudiant",
-  },
-  {
-    email: "delegate@test.com",
-    password: "123456",
-    role: "delegate",
-    name: "Paul Délégué",
-  },
-  {
-    email: "admin@test.com",
-    password: "123456",
-    role: "admin",
-    name: "Admin Principal",
-  },
-]
-
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-  const login = (email, password) => {
-    const foundUser = fakeUsers.find(
-      (u) => u.email === email && u.password === password
-    )
-
-    if (!foundUser) {
-      return { success: false, message: "Identifiants incorrects" }
+  useEffect(() => {
+    const savedUser = localStorage.getItem("user")
+    const token = localStorage.getItem("token")
+    if (savedUser && token) {
+      try {
+        setUser(JSON.parse(savedUser))
+      } catch (e) {
+        localStorage.removeItem("user")
+      }
     }
+    setLoading(false)
+  }, [])
 
-    setUser(foundUser)
-    return { success: true, role: foundUser.role }
+  const login = async (email, password) => {
+    try {
+      const response = await fetch("http://localhost:5000/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        return { success: false, message: data.message || "Identifiants invalides" }
+      }
+
+      // On stocke tout ici pour centraliser
+      localStorage.setItem("token", data.token)
+      localStorage.setItem("user", JSON.stringify(data.user))
+      setUser(data.user)
+
+      return { success: true, role: data.role }
+    } catch (error) {
+      return { success: false, message: "Le serveur ne répond pas" }
+    }
   }
 
   const logout = () => {
     setUser(null)
+    localStorage.clear() // Plus propre pour tout vider
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
-      {children}
+    <AuthContext.Provider value={{ user, login, logout, loading }}>
+      {!loading && children}
     </AuthContext.Provider>
   )
 }
