@@ -133,7 +133,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="bg-white py-6 mt-12 shadow-inner text-center text-gray-500">
-        &copy; {new Date().getFullYear()} Academix. Tous droits réservés.
+        &copy; {new Date().getFullYear()} Omniflex. Tous droits réservés.
       </footer>
     </div>
   )
