@@ -1,250 +1,350 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import axios from "axios"
 import DelegueSidebar from "../../../components/dashboard/DelegateSidebar"
 import AdminTopbar from "../../../components/dashboard/DelegateTopbar"
-import { FileText, Edit, Trash2, X, Plus, Eye } from "lucide-react"
+import { 
+  FileText, Edit, Trash2, X, Plus, Search, 
+  Phone, Calendar, UploadCloud, UserCheck, Loader2, Download, ChevronDown, CheckCircle2, AlertCircle
+} from "lucide-react"
 
 export default function DelegueReports() {
-  const [reports, setReports] = useState([
-    { id: 1, title: "Rapport de stage", classe: "GL3A", filiere: "GL", date: "2024-06-12", language: "Français",tel:"673730091" },
-    { id: 2, title: "Projet Réseau", classe: "SR3C", filiere: "SR", date: "2024-06-15", language: "Anglais",tel:"673730091"  },
-    { id: 3, title: "Mémoire de licence", classe: "GL3B", filiere: "GL", date: "2024-06-20", language: "Français",tel:"673730091"  },
-  ])
-
+  // --- ÉTATS ---
+  const [reports, setReports] = useState([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [editReport, setEditReport] = useState(null)
   const [deleteReport, setDeleteReport] = useState(null)
   const [addReport, setAddReport] = useState(false)
-  const [formValues, setFormValues] = useState({ title: "", classe: "", filiere: "", date: "", language: "Français" })
+  const [status, setStatus] = useState({ type: "", msg: "" })
 
-  const filteredReports = reports.filter(
-    r =>
-      r.title.toLowerCase().includes(search.toLowerCase()) ||
-      r.classe.toLowerCase().includes(search.toLowerCase()) ||
-      r.filiere.toLowerCase().includes(search.toLowerCase()) ||
-      r.tel.toLowerCase().includes(search.toLowerCase()) 
+  // --- OPTIONS ---
+  const LISTE_FILIERES = ["Génie Logiciel", "Systèmes & Réseaux", "Sécurité Informatique", "Data Science", "Management des SI"];
+  const LISTE_NIVEAUX = ["Licence 1", "Licence 2", "Licence 3", "Master 1", "Master 2"];
+  const LISTE_CLASSES = ["Groupe A", "Groupe B", "Soir", "Alternance", "Initial"];
+
+  const [formValues, setFormValues] = useState({ 
+    title: "", student: "", supervisor: "", 
+    classe: LISTE_CLASSES[0], filiere: LISTE_FILIERES[0], niveau: LISTE_NIVEAUX[0], 
+    language: "Français", tel: "" 
+  })
+  const [selectedFile, setSelectedFile] = useState(null)
+
+  const API_URL = "http://localhost:5000/api/reports"
+  const token = localStorage.getItem('token')
+
+  // --- LOGIQUE API ---
+  const fetchReports = async () => {
+    try {
+      setLoading(true)
+      const res = await axios.get(`${API_URL}/mine`, { headers: { Authorization: `Bearer ${token}` } })
+      if (res.data.success) setReports(res.data.reports)
+    } catch (err) {
+      showStatus("error", "Erreur de chargement")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { fetchReports() }, [])
+
+  const showStatus = (type, msg) => {
+    setStatus({ type, msg })
+    setTimeout(() => setStatus({ type: "", msg: "" }), 4000)
+  }
+
+  const handleFormChange = (e) => setFormValues({ ...formValues, [e.target.name]: e.target.value })
+
+  const handleAddReport = async () => {
+    if (!selectedFile || !formValues.title || !formValues.student) {
+      return showStatus("error", "Fichier, titre et étudiant obligatoires.")
+    }
+    const formData = new FormData()
+    Object.keys(formValues).forEach(key => formData.append(key, formValues[key]))
+    formData.append("file", selectedFile)
+
+    try {
+      const res = await axios.post(`${API_URL}/upload`, formData, {
+        headers: { 
+          'Content-Type': 'multipart/form-data', 
+          Authorization: `Bearer ${token}` 
+        }
+      })
+      if (res.data.success) {
+        setReports([res.data.report, ...reports])
+        setAddReport(false)
+        resetForm()
+        showStatus("success", "Rapport publié avec succès.")
+      }
+    } catch (err) {
+      showStatus("error", "Échec de l'ajout.")
+    }
+  }
+
+  const handleEditSave = async () => {
+    try {
+      const res = await axios.patch(`${API_URL}/${editReport._id}`, formValues, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      setReports(reports.map(r => r._id === editReport._id ? res.data.report : r))
+      setEditReport(null)
+      resetForm()
+      showStatus("success", "Mise à jour réussie.")
+    } catch (err) {
+      showStatus("error", "Erreur de modification.")
+    }
+  }
+
+  const handleDelete = async () => {
+    try {
+      await axios.delete(`${API_URL}/${deleteReport._id}`, { headers: { Authorization: `Bearer ${token}` } })
+      setReports(reports.filter(r => r._id !== deleteReport._id))
+      setDeleteReport(null)
+      showStatus("success", "Supprimé avec succès.")
+    } catch (err) {
+      showStatus("error", "Action impossible.")
+    }
+  }
+
+  const handleDownload = async (fileUrl, fileName) => {
+    try {
+      const response = await fetch(fileUrl)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      const safeName = fileName.toLowerCase().endsWith('.pdf') ? fileName : `${fileName}.pdf`
+      link.setAttribute('download', safeName)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+    } catch (error) {
+      showStatus("error", "Erreur de téléchargement.")
+    }
+  }
+
+  const isToday = (dateStr) => {
+    if (!dateStr) return false;
+    const today = new Date().toDateString();
+    const reportDate = new Date(dateStr).toDateString();
+    return today === reportDate;
+  }
+
+  const resetForm = () => {
+    setFormValues({ title: "", student: "", supervisor: "", classe: LISTE_CLASSES[0], filiere: LISTE_FILIERES[0], niveau: LISTE_NIVEAUX[0], language: "Français", tel: "" })
+    setSelectedFile(null)
+  }
+
+  const filteredReports = reports.filter(r =>
+    r.title?.toLowerCase().includes(search.toLowerCase()) ||
+    r.student?.toLowerCase().includes(search.toLowerCase())
   )
 
-  // 🔹 Handlers
-  const handleFormChange = (e) => {
-    setFormValues({ ...formValues, [e.target.name]: e.target.value })
-  }
-
-  const handleAddReport = () => {
-    if (!formValues.title || !formValues.classe || !formValues.filiere || !formValues.date) {
-      alert("Veuillez remplir tous les champs.")
-      return
-    }
-    setReports([...reports, { id: Date.now(), ...formValues }])
-    setAddReport(false)
-    setFormValues({ title: "", classe: "", filiere: "", date: "", language: "Français" })
-  }
-
-  const handleEditOpen = (report) => {
-    setEditReport(report)
-    setFormValues({ ...report })
-  }
-
-  const handleEditSave = () => {
-    setReports(
-      reports.map(r => r.id === editReport.id ? { ...r, ...formValues } : r)
-    )
-    setEditReport(null)
-  }
-
-  const handleDelete = () => {
-    setReports(reports.filter(r => r.id !== deleteReport.id))
-    setDeleteReport(null)
-  }
-
   return (
-    <div className="flex bg-gray-100 min-h-screen">
+    <div className="flex bg-slate-50 h-screen overflow-hidden text-slate-900 font-sans">
       <DelegueSidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         <AdminTopbar />
 
-        <main className="p-8">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800">Gestion des rapports</h2>
-            <button
-              onClick={() => setAddReport(true)}
-              className="px-4 py-2 flex items-center gap-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
-            >
-              <Plus size={18} /> Ajouter un rapport
-            </button>
-          </div>
+        <main className="flex-1 overflow-y-auto p-8 md:p-12 scrollbar-hide">
+          {status.msg && (
+            <div className={`fixed top-10 right-10 z-[200] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-2xl border animate-in slide-in-from-right ${status.type === "success" ? "bg-emerald-600 border-emerald-400 text-white" : "bg-rose-600 border-rose-400 text-white"}`}>
+              {status.type === "success" ? <CheckCircle2 size={20} /> : <AlertCircle size={20} />}
+              <span className="font-bold text-sm">{status.msg}</span>
+            </div>
+          )}
 
-          <div className="bg-white rounded-2xl shadow p-4">
-            <div className="flex justify-between items-center mb-4">
-              <input
-                type="text"
-                placeholder="Rechercher..."
-                className="border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+          <div className="max-w-full mx-auto space-y-10">
+            {/* HEADER */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[32px] shadow-sm border border-slate-100">
+              <div>
+                <h2 className="text-3xl font-black text-slate-950 tracking-tight">Gestion des rapports</h2>
+                <p className="text-slate-500 font-medium mt-1">Suivi des travaux de fin d'études.</p>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="relative group">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input type="text" placeholder="Rechercher..." className="pl-11 pr-4 py-3 bg-slate-100/50 border border-slate-200 rounded-2xl w-full md:w-80 text-sm focus:outline-none focus:border-emerald-500 transition-all font-semibold" value={search} onChange={(e) => setSearch(e.target.value)} />
+                </div>
+                <button onClick={() => { resetForm(); setAddReport(true); }} className="px-6 py-3.5 bg-emerald-600 text-white rounded-2xl font-bold text-sm shadow-lg hover:bg-emerald-700 transition-all flex items-center gap-2">
+                  <Plus size={18} strokeWidth={3} /> Nouveau
+                </button>
+              </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full table-auto border-collapse">
-                <thead className="bg-emerald-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-gray-600">Titre</th>
-                    <th className="px-6 py-3 text-left text-gray-600">Classe</th>
-                    <th className="px-6 py-3 text-left text-gray-600">Filière</th>
-                    <th className="px-6 py-3 text-left text-gray-600">Langue</th>
-                    <th className="px-6 py-3 text-left text-gray-600">Date</th>
-                    <th className="px-6 py-3 text-left text-gray-600">Tel</th>
-                    <th className="px-6 py-3 text-center text-gray-600">Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {filteredReports.map(report => (
-                    <tr key={report.id} className="border-b hover:bg-gray-50 transition">
-                      <td className="px-6 py-4 flex items-center gap-2">
-                        <FileText className="text-emerald-600" size={18} />
-                        {report.title}
-                      </td>
-                      <td className="px-6 py-4">{report.classe}</td>
-                      <td className="px-6 py-4">{report.filiere}</td>
-                      <td className="px-6 py-4">{report.language}</td>
-                      <td className="px-6 py-4">{report.date}</td>
-                      <td className="px-6 py-4">{report.tel}</td>
-                      <td className="px-6 py-4 flex justify-center gap-2">
-                        <button
-                          onClick={() => handleEditOpen(report)}
-                          className="text-blue-700 bg-blue-300 rounded p-2 hover:bg-blue-500"
-                          title="Modifier"
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button
-                          onClick={() => setDeleteReport(report)}
-                          className="text-red-700 bg-red-300 rounded p-2 hover:bg-red-500"
-                          title="Supprimer"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                        <button className="text-green-700 bg-green-300 rounded p-2 hover:bg-green-500" title="Voir">
-                          <Eye size={18} />
-                        </button>
-                      </td>
+            {/* TABLEAU */}
+            <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[1100px]">
+                  <thead>
+                    <tr className="bg-slate-50/50 border-b border-slate-100">
+                      <th className="px-8 py-6 text-[11px] font-black uppercase tracking-wider text-slate-400">Document / Étudiant</th>
+                      <th className="px-8 py-6 text-[11px] font-black uppercase tracking-wider text-slate-400">Encadrant</th>
+                      <th className="px-8 py-6 text-[11px] font-black uppercase tracking-wider text-slate-400">Cursus</th>
+                      <th className="px-8 py-6 text-[11px] font-black uppercase tracking-wider text-slate-400">Publication</th>
+                      <th className="px-8 py-6 text-[11px] font-black uppercase tracking-wider text-slate-400 text-center">Actions</th>
                     </tr>
-                  ))}
-                  {filteredReports.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-4 text-center text-gray-400">
-                        Aucun rapport trouvé
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {loading ? (
+                      <tr><td colSpan="5" className="py-20 text-center"><Loader2 className="mx-auto animate-spin text-emerald-600" /></td></tr>
+                    ) : filteredReports.map(report => (
+                      <tr key={report._id} className="hover:bg-emerald-50/30 transition-colors group">
+                        <td className="px-8 py-5">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center shrink-0">
+                              <FileText size={22} />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-900 text-[15px]">{report.title}</span>
+                              <span className="text-[11px] font-extrabold text-slate-400 uppercase">{report.student}</span>
+                              <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1"><Phone size={10} /> {report.tel}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-8 py-5">
+                          <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                            <UserCheck size={20} className="text-emerald-600" />
+                            {report.supervisor || "À définir"}
+                          </div>
+                        </td>
+                        <td className="px-8 py-5">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 bg-slate-900 text-white text-[10px] font-black rounded-lg uppercase">{report.niveau}</span>
+                            <span className="text-sm font-bold text-slate-700">{report.filiere}</span>
+                            <span className="text-[10px] font-bold text-slate-500">{report.classe}</span>
+                          </div>
+                        </td>
+                        <td className="px-8 py-5">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2 text-sm font-bold text-slate-600">
+                              <Calendar size={14} className="text-slate-400" />
+                              {report.createdAt ? new Date(report.createdAt).toLocaleDateString('fr-FR') : "N/A"}
+                            </div>
+                            {isToday(report.createdAt) && (
+                              <span className="w-fit px-2 py-0.5 bg-emerald-100 text-emerald-700 text-[9px] font-black rounded-full uppercase animate-pulse">Récent</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-8 py-5">
+                          <div className="flex justify-center gap-2.5">
+                            <button onClick={() => { setEditReport(report); setFormValues(report); }} className="p-2.5 text-amber-600 bg-amber-50 hover:bg-amber-100 rounded-xl transition-all"><Edit size={18} /></button>
+                            <button onClick={() => setDeleteReport(report)} className="p-2.5 text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl transition-all"><Trash2 size={18} /></button>
+                            <button onClick={() => handleDownload(report.fileUrl, report.title)} className="p-2.5 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-xl transition-all"><Download size={18} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </main>
 
-        {/* 🔹 MODAL AJOUT */}
-        {addReport && (
-          <ModalReport
-            title="Ajouter un rapport"
-            values={formValues}
-            setValues={setFormValues}
-            onClose={() => setAddReport(false)}
-            onSave={handleAddReport}
-          />
-        )}
-
-        {/* 🔹 MODAL MODIFICATION */}
-        {editReport && (
-          <ModalReport
-            title="Modifier le rapport"
-            values={formValues}
-            setValues={setFormValues}
-            onClose={() => setEditReport(null)}
-            onSave={handleEditSave}
-          />
-        )}
-
-        {/* 🔹 MODAL SUPPRESSION */}
-        {deleteReport && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-xl w-[380px] p-6 shadow-lg text-center">
-              <div className="flex justify-end">
-                <button onClick={() => setDeleteReport(null)}><X /></button>
+        {/* MODAL AJOUT/MODIF */}
+        {(addReport || editReport) && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-md" onClick={() => { setAddReport(false); setEditReport(null); }} />
+            <div className="relative bg-white rounded-[32px] w-full max-w-lg flex flex-col max-h-[90vh] shadow-2xl border border-slate-100 animate-in zoom-in duration-300 overflow-hidden">
+              <div className="p-8 pb-4">
+                <h3 className="text-2xl font-black text-slate-950 tracking-tight">
+                  {addReport ? "Nouveau Rapport" : "Modifier Rapport"}
+                </h3>
               </div>
-              <h3 className="text-lg font-bold text-red-600 mb-3">Confirmer la suppression</h3>
-              <p className="text-gray-600 mb-6">
-                Supprimer le rapport <br />
-                <span className="font-semibold">{deleteReport.title}</span> ?
-              </p>
-              <div className="flex justify-center gap-4">
-                <button onClick={() => setDeleteReport(null)} className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400">Annuler</button>
-                <button onClick={handleDelete} className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700">Supprimer</button>
+
+              <div className="flex-1 overflow-y-auto p-8 pt-0 scrollbar-thin scrollbar-thumb-slate-200">
+                <div className="grid grid-cols-2 gap-5">
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Titre du rapport</label>
+                    <input type="text" name="title" value={formValues.title} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 transition-all" />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Étudiant</label>
+                    <input type="text" name="student" value={formValues.student} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" />
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Téléphone</label>
+                    <input type="text" name="tel" value={formValues.tel} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold" />
+                  </div>
+
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Encadrant (Superviseur)</label>
+                    <input type="text" name="supervisor" value={formValues.supervisor} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold focus:ring-2 focus:ring-emerald-500" />
+                  </div>
+
+                  <div className="space-y-1.5 relative">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Filière</label>
+                    <select name="filiere" value={formValues.filiere} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold appearance-none cursor-pointer focus:ring-2 focus:ring-emerald-500">
+                      {LISTE_FILIERES.map(f => <option key={f} value={f}>{f}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-11 text-slate-400 pointer-events-none" size={16} />
+                  </div>
+
+                  <div className="space-y-1.5 relative">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Niveau</label>
+                    <select name="niveau" value={formValues.niveau} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold appearance-none cursor-pointer focus:ring-2 focus:ring-emerald-500">
+                      {LISTE_NIVEAUX.map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-11 text-slate-400 pointer-events-none" size={16} />
+                  </div>
+
+                  <div className="col-span-2 space-y-1.5 relative">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Classe</label>
+                    <select name="classe" value={formValues.classe} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold appearance-none cursor-pointer focus:ring-2 focus:ring-emerald-500">
+                      {LISTE_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-11 text-slate-400 pointer-events-none" size={16} />
+                  </div>
+
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Langue</label>
+                    <select name="language" value={formValues.language} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold appearance-none cursor-pointer">
+                      <option value="Français">Français</option>
+                      <option value="Anglais">Anglais</option>
+                    </select>
+                  </div>
+
+                  {addReport && (
+                    <div className="col-span-2 space-y-1.5">
+                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Document du rapport (PDF)</label>
+                      <div className="relative w-full py-8 px-5 bg-emerald-50 border-2 border-dashed border-emerald-200 rounded-[24px] flex flex-col items-center justify-center gap-2 text-emerald-600 font-bold cursor-pointer hover:bg-emerald-100 transition-all group">
+                        <UploadCloud size={32} />
+                        <span className="text-[10px] font-black uppercase tracking-tighter text-center">
+                          {selectedFile ? selectedFile.name : "Sélectionner le fichier PDF"}
+                        </span>
+                        <input type="file" accept=".pdf" onChange={(e) => setSelectedFile(e.target.files[0])} className="absolute inset-0 opacity-0 cursor-pointer" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="p-8 bg-white border-t border-slate-50 flex gap-4">
+                <button onClick={() => { setAddReport(false); setEditReport(null); }} className="flex-1 py-4 bg-slate-100 text-slate-500 font-black rounded-2xl text-[11px] uppercase tracking-widest hover:bg-slate-200 transition-all">Annuler</button>
+                <button onClick={addReport ? handleAddReport : handleEditSave} className="flex-1 py-4 bg-emerald-600 text-white font-black rounded-2xl text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all">Confirmer</button>
               </div>
             </div>
           </div>
         )}
-      </div>
-    </div>
-  )
-}
 
-// 🔹 Composant Modal réutilisable pour Ajouter / Modifier
-function ModalReport({ title, values, setValues, onClose, onSave }) {
-  const handleChange = (e) => setValues({ ...values, [e.target.name]: e.target.value })
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl w-[400px] p-6 shadow-lg relative">
-        <button className="absolute top-4 right-4 text-gray-500 hover:text-gray-700" onClick={onClose}><X size={20} /></button>
-        <h3 className="text-lg font-bold mb-4 text-gray-800">{title}</h3>
-        <div className="flex flex-col gap-3">
-          <input
-            type="text"
-            name="title"
-            placeholder="Nom du projet"
-            value={values.title}
-            onChange={handleChange}
-            className="border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-          <input
-            type="text"
-            name="classe"
-            placeholder="Classe"
-            value={values.classe}
-            onChange={handleChange}
-            className="border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-          <input
-            type="text"
-            name="filiere"
-            placeholder="Filière"
-            value={values.filiere}
-            onChange={handleChange}
-            className="border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-          <input
-            type="date"
-            name="date"
-            value={values.date}
-            onChange={handleChange}
-            className="border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
-          <select
-            name="language"
-            value={values.language}
-            onChange={handleChange}
-            className="border rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="Français">Français</option>
-            <option value="Anglais">Anglais</option>
-          </select>
-        </div>
-        <div className="flex justify-end gap-4 mt-6">
-          <button onClick={onClose} className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400">Annuler</button>
-          <button onClick={onSave} className="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">Enregistrer</button>
-        </div>
+        {/* MODAL SUPPRESSION */}
+        {deleteReport && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-md" onClick={() => setDeleteReport(null)} />
+            <div className="relative bg-white rounded-[32px] w-full max-w-sm p-8 shadow-2xl border border-slate-100 text-center animate-in zoom-in">
+              <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl flex items-center justify-center mx-auto mb-6"><Trash2 size={32} /></div>
+              <h3 className="text-xl font-black text-slate-950">Supprimer ?</h3>
+              <p className="text-slate-500 text-sm mb-8">Action irréversible pour le rapport de {deleteReport.student}.</p>
+              <div className="grid grid-cols-2 gap-4">
+                <button onClick={() => setDeleteReport(null)} className="py-4 bg-slate-100 text-slate-600 font-bold rounded-2xl text-xs uppercase">Annuler</button>
+                <button onClick={handleDelete} className="py-4 bg-rose-600 text-white font-bold rounded-2xl text-xs uppercase">Confirmer</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
