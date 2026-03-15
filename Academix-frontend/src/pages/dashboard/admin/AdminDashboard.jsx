@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from "react"
 import axios from "axios"
 import jsPDF from "jspdf"
 import { 
-  Users, FileText, BookOpen, TrendingUp, UserCheck, Loader2, Download, AlertCircle, CheckCircle2 
+  Users, FileText, BookOpen, TrendingUp, UserCheck, Loader2, Download, AlertCircle, CheckCircle2, Calendar
 } from "lucide-react"
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import AdminSidebar from "../../../components/dashboard/AdminSidebar"
 import AdminTopbar from "../../../components/dashboard/AdminTopbar"
 
@@ -12,57 +13,52 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [exporting, setExporting] = useState(false)
   const [modal, setModal] = useState({ show: false, message: "", type: "info" })
-  const dashboardRef = useRef(null)
+  
+  // Nouveaux états pour les filtres du graphique
+  const [chartMetric, setChartMetric] = useState("flux") 
+  const [dateRange, setDateRange] = useState({
+    start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // J-7 par défaut
+    end: new Date().toISOString().split('T')[0]
+  })
+
+  // Fonction de récupération des données avec filtres
+  const fetchStats = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      const res = await axios.get("http://localhost:5000/api/stats/overview", {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { ...dateRange, metric: chartMetric } // Envoi des filtres au backend
+      })
+      setStats(res.data.stats)
+    } catch (err) {
+      showAlert("Erreur lors de la mise à jour des données.", "error")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const token = localStorage.getItem("token")
-        const res = await axios.get("http://localhost:5000/api/stats/overview", {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        setStats(res.data.stats)
-      } catch (err) {
-        showAlert("Impossible de récupérer les statistiques.", "error")
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchStats()
-  }, [])
+  }, [dateRange, chartMetric]) // Recharger si un filtre change
 
   const showAlert = (message, type = "info") => {
     setModal({ show: true, message, type })
   }
 
-  // ✅ GÉNÉRATION SIMPLIFIÉE : Directe via jsPDF (Plus de html2canvas = Plus de bug oklch)
   const handleExportPDF = async () => {
     if (!stats) return
     setExporting(true)
-    
     try {
-      const doc = new jsPDF({
-        orientation: "p",
-        unit: "mm",
-        format: "a4",
-      });
-
+      const doc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
       const dateStr = new Date().toLocaleDateString('fr-FR');
-
-      // Style de l'en-tête (Slate-900)
       doc.setFillColor(15, 23, 42); 
       doc.rect(0, 0, 210, 40, "F");
-      
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(22);
       doc.setFont("helvetica", "bold");
       doc.text("ACADEMIX - RAPPORT ADMIN", 20, 25);
-      
       doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
       doc.text(`Édité le : ${dateStr}`, 160, 25);
-
-      // Section Stats
       doc.setTextColor(30, 41, 59);
       doc.setFontSize(16);
       doc.text("Indicateurs Clés", 20, 55);
@@ -87,40 +83,16 @@ export default function AdminDashboard() {
         yPos += 15;
       });
 
-      // Section Filières
-      if (stats.distribution) {
-        yPos += 10;
-        doc.setFontSize(16);
-        doc.setFont("helvetica", "bold");
-        doc.text("Répartition par filière", 20, yPos);
-        yPos += 15;
-
-        stats.distribution.forEach((item) => {
-          doc.setFontSize(11);
-          doc.text(item.label, 25, yPos);
-          doc.text(`${item.value}%`, 175, yPos);
-          
-          // Barre de progression (Couleurs simples)
-          doc.setFillColor(241, 245, 249);
-          doc.rect(25, yPos + 2, 160, 2, "F");
-          doc.setFillColor(16, 185, 129); 
-          doc.rect(25, yPos + 2, (item.value * 160) / 100, 2, "F");
-          yPos += 12;
-        });
-      }
-
       doc.save(`Rapport_Admin_${new Date().toISOString().split('T')[0]}.pdf`);
-      showAlert("Le rapport a été généré avec succès (Format vectoriel).", "success");
-      
+      showAlert("Le rapport a été généré avec succès.", "success");
     } catch (error) {
-      console.error("Erreur PDF:", error);
       showAlert("Erreur lors de la création du PDF.", "error");
     } finally {
       setExporting(false);
     }
   }
 
-  if (loading) {
+  if (loading && !stats) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-slate-50">
         <Loader2 className="animate-spin text-emerald-600" size={48} />
@@ -129,7 +101,7 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="flex bg-[#F8FAFC] h-screen overflow-hidden relative">
+    <div className="flex bg-[#F8FAFC] h-screen overflow-hidden relative font-sans">
       <AdminSidebar />
 
       {modal.show && (
@@ -156,7 +128,7 @@ export default function AdminDashboard() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
               <div>
                 <h2 className="text-3xl font-black text-slate-900 tracking-tight">Vue d’ensemble</h2>
-                <p className="text-slate-500 font-medium mt-1">Données réelles synchronisées avec MongoDB.</p>
+                <p className="text-slate-500 font-medium mt-1">Données analytiques MongoDB en temps réel.</p>
               </div>
               <button 
                 onClick={handleExportPDF}
@@ -178,9 +150,80 @@ export default function AdminDashboard() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-10">
               <div className="lg:col-span-2 bg-white rounded-[32px] p-8 shadow-sm border border-slate-100/50">
-                <h3 className="text-xl font-black text-slate-800 mb-8">Activité récente</h3>
-                <div className="h-72 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded-[24px] bg-slate-50/50">
-                   <p className="text-slate-500 font-bold text-sm">Graphique des flux</p>
+                
+                {/* --- HEADER DU GRAPHIQUE AVEC FILTRES --- */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+                  <h3 className="text-xl font-black text-slate-800">Activité récente</h3>
+                  
+                  <div className="flex flex-wrap items-center gap-3">
+                    {/* Sélecteur de Type de Données */}
+                    <select 
+                      value={chartMetric}
+                      onChange={(e) => setChartMetric(e.target.value)}
+                      className="bg-slate-50 border border-slate-200 text-slate-600 text-xs font-bold py-2 px-3 rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    >
+                      <option value="flux">Activité</option>
+                      <option value="reports">Rapports</option>
+                      <option value="courses">Cours</option>
+                      <option value="students">Étudiants</option>
+                    </select>
+
+                    {/* Sélecteur de Calendrier */}
+                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 p-1.5 rounded-xl">
+                      <Calendar size={14} className="text-slate-400 ml-1" />
+                      <input 
+                        type="date" 
+                        value={dateRange.start}
+                        onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                        className="bg-transparent border-none text-[10px] font-bold text-slate-600 outline-none"
+                      />
+                      <span className="text-slate-300">-</span>
+                      <input 
+                        type="date" 
+                        value={dateRange.end}
+                        onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                        className="bg-transparent border-none text-[10px] font-bold text-slate-600 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={stats?.recentActivity || []}>
+                      <defs>
+                        <linearGradient id="colorActivity" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis 
+                        dataKey="name" 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 'bold'}}
+                        dy={10}
+                      />
+                      <YAxis 
+                        axisLine={false} 
+                        tickLine={false} 
+                        tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 'bold'}}
+                      />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="value" // Le backend devra renvoyer le champ "value" peu importe la métrique
+                        stroke="#10b981" 
+                        strokeWidth={3}
+                        fillOpacity={1} 
+                        fill="url(#colorActivity)" 
+                        animationDuration={1000}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
 
@@ -203,6 +246,7 @@ export default function AdminDashboard() {
   )
 }
 
+// Composants StatCard et FiliereProgress restent identiques à votre version précédente
 function StatCard({ title, value, icon, color }) {
   const colors = {
     emerald: "bg-emerald-50 text-emerald-600 ring-emerald-100",
