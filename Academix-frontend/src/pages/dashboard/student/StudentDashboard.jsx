@@ -19,7 +19,7 @@ export default function DelegueDashboard() {
   const [error, setError] = useState(null)
 
   // Configuration API
-  const API_URL = "http://localhost:5000/api"
+  const API_URL = "https://academix-i3qb.onrender.com/api"
   const token = localStorage.getItem('token')
 
   // --- LOGIQUE BACKEND ---
