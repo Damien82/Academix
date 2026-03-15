@@ -25,7 +25,7 @@ export default function AdminDashboard() {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem("token")
-      const res = await axios.get("http://localhost:5000/api/stats/overview", {
+      const res = await axios.get("https://academix-i3qb.onrender.com/api/stats/overview", {
         headers: { Authorization: `Bearer ${token}` },
         params: { ...dateRange, metric: chartMetric } // Envoi des filtres au backend
       })

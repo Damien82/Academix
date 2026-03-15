@@ -19,7 +19,7 @@ export default function ReportsManagement() {
   const [editedSupervisor, setEditedSupervisor] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const API_URL = "http://localhost:5000/api/reports"
+  const API_URL = "https://academix-i3qb.onrender.com/api/reports"
   const token = localStorage.getItem('token')
 
   // --- ACTIONS API ---

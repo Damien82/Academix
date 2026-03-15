@@ -19,7 +19,7 @@ export default function CoursesManagement() {
   const [editedLanguage, setEditedLanguage] = useState("Français")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const API_URL = "http://localhost:5000/api/courses"
+  const API_URL = "https://academix-i3qb.onrender.com/api/courses"
   const token = localStorage.getItem('token')
 
   // --- ACTIONS API ---

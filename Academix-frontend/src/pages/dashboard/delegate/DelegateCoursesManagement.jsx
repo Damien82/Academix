@@ -32,7 +32,7 @@ export default function DelegueCourses() {
   })
   const [selectedFile, setSelectedFile] = useState(null)
 
-  const API_URL = "http://localhost:5000/api/courses"
+  const API_URL = "https://academix-i3qb.onrender.com/api/courses"
   const token = localStorage.getItem('token')
 
   // --- LOGIQUE API ---

@@ -21,7 +21,7 @@ export default function DelegueDashboard() {
   const [deleteReport, setDeleteReport] = useState(null)
   const [editValues, setEditValues] = useState({ title: "", language: "Français" })
 
-  const API_URL = "http://localhost:5000/api"
+  const API_URL = "https://academix-i3qb.onrender.com/api"
   const token = localStorage.getItem('token')
 
   // --- LOGIQUE DE RÉCUPÉRATION (PRÊTE POUR LE BACKEND) ---

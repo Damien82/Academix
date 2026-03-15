@@ -14,7 +14,7 @@ export default function UsersManagement() {
 const fetchUsers = async () => {
   try {
     const token = localStorage.getItem('token');
-    const res = await fetch('http://localhost:5000/api/users', {
+    const res = await fetch('https://academix-i3qb.onrender.com/api/users', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     const data = await res.json();
@@ -47,7 +47,7 @@ const fetchUsers = async () => {
     
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`http://localhost:5000/api/users/${userId}/status`, {
+      const res = await fetch(`https://academix-i3qb.onrender.com/api/users/${userId}/status`, {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
@@ -68,7 +68,7 @@ const fetchUsers = async () => {
   const confirmDelete = async () => {
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`http://localhost:5000/api/users/${deleteUser._id}`, {
+      const res = await fetch(`https://academix-i3qb.onrender.com/api/users/${deleteUser._id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       })

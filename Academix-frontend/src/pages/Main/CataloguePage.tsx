@@ -44,8 +44,8 @@ export default function Catalogue() {
       const config = { headers: { Authorization: `Bearer ${token}` } }
 
       const [reportsRes, coursesRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/reports", config),
-        axios.get("http://localhost:5000/api/courses", config)
+        axios.get("https://academix-i3qb.onrender.com/api/reports", config),
+        axios.get("https://academix-i3qb.onrender.com/api/courses", config)
       ])
 
       const reportsData = reportsRes.data.reports || []
