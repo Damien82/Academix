@@ -27,7 +27,7 @@ export default function MesRapports() {
   })
   const [selectedFile, setSelectedFile] = useState(null)
 
-  const API_URL = "http://localhost:5000/api/reports"
+  const API_URL = "https://academix-i3qb.onrender.com/api/reports"
   const token = localStorage.getItem('token')
 
   // --- LOGIQUE API ---
