@@ -166,7 +166,6 @@ export default function DelegueDashboard() {
                         <th className="px-8 py-5">Classe & Filière</th>
                         <th className="px-8 py-5">Langue</th>
                         <th className="px-8 py-5">Soumission</th>
-                        <th className="px-8 py-5 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 text-sm font-medium">
@@ -197,13 +196,6 @@ export default function DelegueDashboard() {
                           </td>
                           <td className="px-8 py-6 text-slate-400 font-bold text-xs uppercase">
                             {report.createdAt ? new Date(report.createdAt).toLocaleDateString() : report.date}
-                          </td>
-                          <td className="px-8 py-6">
-                            <div className="flex justify-center gap-3">
-                              <ActionButton onClick={() => handleEditOpen(report)} icon={<Edit size={16} />} color="blue" title="Modifier" />
-                              <ActionButton onClick={() => setDeleteReport(report)} icon={<Trash2 size={16} />} color="red" title="Supprimer" />
-                              <ActionButton onClick={() => handleDownload(report.fileUrl, report.title)} icon={<Eye size={16} />} color="emerald" title="Visualiser" />
-                            </div>
                           </td>
                         </tr>
                       ))}
