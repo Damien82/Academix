@@ -45,6 +45,8 @@ exports.getCourses = async (req, res) => {
   }
 };
 
+
+
 exports.deleteCourse = async (req, res) => {
   try {
     const course = await Course.findById(req.params.id);
@@ -98,5 +100,27 @@ exports.updateCourse = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getMyCourses = async (req, res) => {
+  try {
+    // On utilise l'ID de l'utilisateur extrait du token par le middleware d'authentification
+    const userId = req.user.id;
+
+    // Recherche des cours où 'uploadedById' correspond à l'ID de l'utilisateur connecté
+    const myCourses = await Course.find({ uploadedById: userId }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: myCourses.length,
+      courses: myCourses
+    });
+  } catch (error) {
+    console.error("Erreur GetMyCourses:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: "Erreur lors de la récupération de vos cours." 
+    });
   }
 };

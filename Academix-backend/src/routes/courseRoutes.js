@@ -7,6 +7,7 @@ const { upload } = require('../config/cloudinary');
 // Tout le monde (connecté) peut voir les cours
 router.get('/', auth, courseController.getCourses);
 
+router.get('/mine', auth, courseController.getMyCourses);
 const isDelegateOrAdmin = (req, res, next) => {
   if (req.user.role === 'delegate' || req.user.role === 'admin') {
     next();

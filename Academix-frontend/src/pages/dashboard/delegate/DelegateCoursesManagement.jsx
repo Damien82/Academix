@@ -37,17 +37,26 @@ export default function DelegueCourses() {
   const token = localStorage.getItem('token')
 
   // --- LOGIQUE API ---
-  const fetchCourses = async () => {
-    try {
-      setLoading(true)
-      const res = await axios.get(API_URL, { headers: { Authorization: `Bearer ${token}` } })
-      if (res.data.success) setCourses(res.data.courses)
-    } catch (err) {
-      showStatus("error", "Erreur de connexion.")
-    } finally {
-      setLoading(false)
+const fetchCourses = async () => {
+  try {
+    setLoading(true);
+    // On ajoute /mine à l'URL de base pour cibler la fonction getMyCourses du backend
+    const res = await axios.get(`${API_URL}/mine`, { 
+      headers: { Authorization: `Bearer ${token}` } 
+    });
+
+    if (res.data.success) {
+      // res.data.courses contient maintenant uniquement vos propres documents
+      setCourses(res.data.courses);
     }
+  } catch (err) {
+    // Gestion plus précise de l'erreur
+    const errorMsg = err.response?.data?.message || "Impossible de charger vos cours.";
+    showStatus("error", errorMsg);
+  } finally {
+    setLoading(false);
   }
+};
 
   useEffect(() => { fetchCourses() }, [])
 
