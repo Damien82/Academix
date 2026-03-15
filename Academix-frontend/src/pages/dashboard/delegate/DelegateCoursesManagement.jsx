@@ -15,6 +15,7 @@ export default function DelegueCourses() {
   const [editCourse, setEditCourse] = useState(null)
   const [deleteCourse, setDeleteCourse] = useState(null)
   const [addCourse, setAddCourse] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [status, setStatus] = useState({ type: "", msg: "" })
 
   const LISTE_FILIERES = ["Génie Logiciel", "Systèmes & Réseaux", "Sécurité Informatique", "Data Science", "Management des SI"];
@@ -66,6 +67,7 @@ export default function DelegueCourses() {
     formData.append("file", selectedFile)
 
     try {
+      setIsSubmitting(true)
       const res = await axios.post(API_URL, formData, {
         headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${token}` }
       })
@@ -75,7 +77,9 @@ export default function DelegueCourses() {
       showStatus("success", "Cours publié avec succès.")
     } catch (err) {
       showStatus("error", "Échec de l'upload.")
-    }
+    }finally {
+    setIsSubmitting(false)
+  }
   }
 
   const handleEditSave = async () => {
@@ -95,13 +99,16 @@ export default function DelegueCourses() {
 
   const handleDelete = async () => {
     try {
+      setIsSubmitting(true)
       await axios.delete(`${API_URL}/${deleteCourse._id}`, { headers: { Authorization: `Bearer ${token}` } })
       setCourses(courses.filter(c => c._id !== deleteCourse._id))
       setDeleteCourse(null)
       showStatus("success", "Supprimé avec succès.")
     } catch (err) {
       showStatus("error", "Action impossible.")
-    }
+    }finally {
+    setIsSubmitting(false)
+  }
   }
 
   const handleDownload = async (fileUrl, fileName) => {
@@ -317,8 +324,19 @@ export default function DelegueCourses() {
 
             <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex gap-4">
               <button onClick={() => { setAddCourse(false); setEditCourse(null); }} className="flex-1 py-4 bg-white border border-slate-200 text-slate-600 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-slate-100 transition-all">Annuler</button>
-              <button onClick={addCourse ? handleAddCourse : handleEditSave} className="flex-1 py-4 bg-emerald-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all">
-                {addCourse ? "Confirmer la publication" : "Enregistrer les modifications"}
+              <button 
+                onClick={addCourse ? handleAddCourse : handleEditSave} 
+                disabled={isSubmitting}
+                className="flex-1 py-4 bg-emerald-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Traitement...
+                  </>
+                ) : (
+                  addCourse ? "Confirmer la publication" : "Enregistrer les modifications"
+                )}
               </button>
             </div>
           </div>
@@ -335,7 +353,13 @@ export default function DelegueCourses() {
             <p className="text-slate-500 text-sm mb-8 italic">"{deleteCourse.title}" sera retiré de la base.</p>
             <div className="grid grid-cols-2 gap-4">
               <button onClick={() => setDeleteCourse(null)} className="py-4 bg-slate-100 text-slate-600 font-black rounded-2xl text-[10px] uppercase">Annuler</button>
-              <button onClick={handleDelete} className="py-4 bg-rose-600 text-white font-black rounded-2xl text-[10px] uppercase">Confirmer</button>
+              <button 
+                onClick={handleDelete} 
+                disabled={isSubmitting}
+                className="py-4 bg-rose-600 text-white font-black rounded-2xl text-[10px] uppercase flex items-center justify-center gap-2 disabled:opacity-70"
+              >
+                {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : "Confirmer"}
+              </button>
             </div>
           </div>
         </div>

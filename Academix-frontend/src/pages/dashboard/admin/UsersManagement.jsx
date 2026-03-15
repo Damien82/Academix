@@ -8,6 +8,7 @@ export default function UsersManagement() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [deleteUser, setDeleteUser] = useState(null)
+  const [isSubmitting, setIsSubmitting] = useState(false) // À ajouter ici
 
   // 1. Charger les utilisateurs depuis l'API
 // Dans ton useEffect ou fetchUsers du frontend
@@ -67,6 +68,7 @@ const fetchUsers = async () => {
   // 4. Suppression (API)
   const confirmDelete = async () => {
     try {
+      setIsSubmitting(true)
       const token = localStorage.getItem('token')
       const res = await fetch(`https://academix-i3qb.onrender.com/api/users/${deleteUser._id}`, {
         method: 'DELETE',
@@ -79,7 +81,9 @@ const fetchUsers = async () => {
       }
     } catch (err) {
       console.error("Erreur de suppression")
-    }
+    }finally {
+    setIsSubmitting(false) // Fin du chargement
+  }
   }
 
   return (
@@ -229,7 +233,20 @@ const fetchUsers = async () => {
             </p>
             <div className="grid grid-cols-2 gap-3.5">
               <button onClick={() => setDeleteUser(null)} className="py-3.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all text-sm">Annuler</button>
-              <button onClick={confirmDelete} className="py-3.5 px-4 bg-rose-700 hover:bg-rose-800 text-white font-bold rounded-xl shadow-sm transition-all text-sm">Supprimer</button>
+              <button 
+                disabled={isSubmitting}
+                onClick={confirmDelete} 
+                className="py-3.5 px-4 bg-rose-700 hover:bg-rose-800 text-white font-bold rounded-xl shadow-sm transition-all text-sm flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="animate-spin" size={18} />
+                    Suppression...
+                  </>
+                ) : (
+                  "Supprimer"
+                )}
+              </button>
             </div>
           </div>
         </div>

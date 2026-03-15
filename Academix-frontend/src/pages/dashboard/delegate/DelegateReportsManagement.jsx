@@ -15,6 +15,7 @@ export default function DelegueReports() {
   const [editReport, setEditReport] = useState(null)
   const [deleteReport, setDeleteReport] = useState(null)
   const [addReport, setAddReport] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [status, setStatus] = useState({ type: "", msg: "" })
 
   // --- OPTIONS ---
@@ -63,6 +64,7 @@ export default function DelegueReports() {
     formData.append("file", selectedFile)
 
     try {
+      setIsSubmitting(true);
       const res = await axios.post(`${API_URL}/upload`, formData, {
         headers: { 
           'Content-Type': 'multipart/form-data', 
@@ -77,6 +79,8 @@ export default function DelegueReports() {
       }
     } catch (err) {
       showStatus("error", "Échec de l'ajout.")
+    }finally{
+    setIsSubmitting(false);
     }
   }
 
@@ -96,12 +100,15 @@ export default function DelegueReports() {
 
   const handleDelete = async () => {
     try {
+      setIsSubmitting(true)
       await axios.delete(`${API_URL}/${deleteReport._id}`, { headers: { Authorization: `Bearer ${token}` } })
       setReports(reports.filter(r => r._id !== deleteReport._id))
       setDeleteReport(null)
       showStatus("success", "Supprimé avec succès.")
     } catch (err) {
       showStatus("error", "Action impossible.")
+    }finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -324,7 +331,20 @@ export default function DelegueReports() {
 
               <div className="p-8 bg-white border-t border-slate-50 flex gap-4">
                 <button onClick={() => { setAddReport(false); setEditReport(null); }} className="flex-1 py-4 bg-slate-100 text-slate-500 font-black rounded-2xl text-[11px] uppercase tracking-widest hover:bg-slate-200 transition-all">Annuler</button>
-                <button onClick={addReport ? handleAddReport : handleEditSave} className="flex-1 py-4 bg-emerald-600 text-white font-black rounded-2xl text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all">Confirmer</button>
+                <button 
+                  onClick={addReport ? handleAddReport : handleEditSave} 
+                  disabled={isSubmitting}
+                  className="flex-1 py-4 bg-emerald-600 text-white font-black rounded-2xl text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Envoi en cours...
+                    </>
+                  ) : (
+                    "Confirmer"
+                  )}
+                </button>
               </div>
             </div>
           </div>
@@ -340,7 +360,13 @@ export default function DelegueReports() {
               <p className="text-slate-500 text-sm mb-8">Action irréversible pour le rapport de {deleteReport.student}.</p>
               <div className="grid grid-cols-2 gap-4">
                 <button onClick={() => setDeleteReport(null)} className="py-4 bg-slate-100 text-slate-600 font-bold rounded-2xl text-xs uppercase">Annuler</button>
-                <button onClick={handleDelete} className="py-4 bg-rose-600 text-white font-bold rounded-2xl text-xs uppercase">Confirmer</button>
+                <button 
+                  onClick={handleDelete} 
+                  disabled={isSubmitting}
+                  className="py-4 bg-rose-600 text-white font-bold rounded-2xl text-xs uppercase flex items-center justify-center gap-2 disabled:opacity-70"
+                >
+                  {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : "Confirmer"}
+                </button>
               </div>
             </div>
           </div>

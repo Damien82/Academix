@@ -1,8 +1,9 @@
-import { User, Mail, Lock, Eye, EyeOff, Phone, GraduationCap, Layers, BarChart3, Grid } from "lucide-react"
+import { User, Mail, Lock, Eye, EyeOff, Phone, GraduationCap, Layers, BarChart3, Grid, Loader2 } from "lucide-react"
 import { useState } from "react"
 
 export default function Register() {
   const [showPassword, setShowPassword] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   
   const [formData, setFormData] = useState({
     fullName: "",
@@ -24,6 +25,7 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    setIsSubmitting(true)
     
     try {
       const response = await fetch('https://academix-i3qb.onrender.com/api/auth/register', {
@@ -41,6 +43,8 @@ export default function Register() {
       }
     } catch (error) {
       alert("Impossible de contacter le serveur.")
+    }finally {
+      setIsSubmitting(false)
     }
   }
 
@@ -219,13 +223,23 @@ export default function Register() {
             </div>
           </div>
 
-          <button className="w-full bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200 text-white py-4 rounded-xl font-bold text-lg transition-all transform hover:-translate-y-0.5 active:scale-[0.98]">
-            Créer mon compte
+          <button 
+            disabled={isSubmitting}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200 text-white py-4 rounded-xl font-bold text-lg transition-all transform hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-80 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="animate-spin" size={22} />
+                Création en cours...
+              </>
+            ) : (
+              "Créer mon compte"
+            )}
           </button>
 
           <p className="text-sm text-center text-gray-500 font-medium">
             Déjà inscrit ?{" "}
-            <a href="/" className="text-emerald-600 font-bold hover:underline">Se connecter</a>
+            <a href="/login" className="text-emerald-600 font-bold hover:underline">Se connecter</a>
           </p>
         </form>
       </div>

@@ -60,27 +60,24 @@ export default function CoursesManagement() {
   }
 
   // 3. Modifier un cours
-  const handleEditSave = async () => {
-    if (!editedTitle.trim()) return;
-    try {
-      setIsSubmitting(true)
-      const response = await axios.patch(`${API_URL}/${editCourse._id}`, 
-        { title: editedTitle, language: editedLanguage },
-        { headers: { Authorization: `Bearer ${token}` }}
-      )
-      
-      if (response.data.success) {
-        setCourses(courses.map((c) => 
-          c._id === editCourse._id ? { ...c, title: editedTitle, language: editedLanguage } : c
-        ))
-        setEditCourse(null)
-      }
-    } catch (error) {
-      alert("Erreur lors de la mise à jour.")
-    } finally {
-      setIsSubmitting(false)
+const handleEditSave = async () => {
+  if (!editedTitle.trim()) return; // Protection contre les titres vides
+  try {
+    setIsSubmitting(true)
+    // ... appel axios
+    if (response.data.success) {
+      // Mise à jour locale de l'état pour éviter un refresh inutile
+      setCourses(courses.map((c) => 
+        c._id === editCourse._id ? { ...c, title: editedTitle, language: editedLanguage } : c
+      ))
+      setEditCourse(null)
     }
+  } catch (error) {
+    alert("Erreur lors de la mise à jour.")
+  } finally {
+    setIsSubmitting(false)
   }
+}
 
   const handleDownload = async (fileUrl, fileName) => {
   try {
@@ -273,9 +270,16 @@ export default function CoursesManagement() {
               <button 
                 disabled={isSubmitting}
                 onClick={handleDelete} 
-                className="py-3.5 bg-rose-700 text-white font-bold rounded-xl text-sm shadow-sm flex items-center justify-center gap-2"
+                className="py-3.5 bg-rose-700 text-white font-bold rounded-xl text-sm shadow-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : "Supprimer"}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="animate-spin" size={18} />
+                    Suppression...
+                  </>
+                ) : (
+                  "Supprimer"
+                )}
               </button>
             </div>
           </div>
@@ -328,9 +332,16 @@ export default function CoursesManagement() {
                 <button 
                   disabled={isSubmitting}
                   onClick={handleEditSave} 
-                  className="flex-1 py-3.5 bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-sm flex items-center justify-center gap-2"
+                  className="flex-1 py-3.5 bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : "Enregistrer"}
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="animate-spin" size={18} />
+                      Enregistrement...
+                    </>
+                  ) : (
+                    "Enregistrer les modifications"
+                  )}
                 </button>
               </div>
             </div>

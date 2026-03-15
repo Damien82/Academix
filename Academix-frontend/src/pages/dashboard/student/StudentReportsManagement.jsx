@@ -12,6 +12,8 @@ export default function MesRapports() {
   const [reports, setReports] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [status, setStatus] = useState({ type: "", msg: "" })
   
   // Modaux
@@ -48,27 +50,47 @@ export default function MesRapports() {
 
   useEffect(() => { fetchReports() }, [])
 
-  const handleAddReport = async () => {
-    if (!formValues.title || !selectedFile) return showStatus("error", "Le titre et le PDF sont obligatoires")
+ const handleAddReport = async () => {
+  if (!formValues.title || !selectedFile) return showStatus("error", "Le titre et le PDF sont obligatoires")
+  
+  // Validation du poids (10 Mo max)
+  if (selectedFile.size > 10 * 1024 * 1024) {
+    return showStatus("error", "Le fichier est trop volumineux (max 10 Mo)")
+  }
+
+  try {
+    setIsSubmitting(true)
+    setUploadProgress(0) // Réinitialisation
 
     const formData = new FormData()
     Object.keys(formValues).forEach(key => formData.append(key, formValues[key]))
     formData.append("file", selectedFile)
 
-    try {
-      const res = await axios.post(`${API_URL}/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${token}` }
-      })
-      if (res.data.success) {
-        setReports([res.data.report, ...reports])
-        setAddReport(false)
-        resetForm()
-        showStatus("success", "Rapport soumis avec succès")
+    const res = await axios.post(`${API_URL}/upload`, formData, {
+      headers: { 
+        'Content-Type': 'multipart/form-data', 
+        Authorization: `Bearer ${token}` 
+      },
+      onUploadProgress: (progressEvent) => {
+        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+        setUploadProgress(percentCompleted)
       }
-    } catch (err) {
-      showStatus("error", "Échec de l'envoi")
+    })
+
+    if (res.data.success) {
+      setReports([res.data.report, ...reports])
+      setAddReport(false)
+      resetForm()
+      showStatus("success", "Rapport soumis avec succès")
     }
+  } catch (err) {
+    const errorMsg = err.response?.data?.message || "Échec de l'envoi"
+    showStatus("error", errorMsg)
+  } finally {
+    setIsSubmitting(false)
+    setUploadProgress(0)
   }
+}
 
   const handleEditSave = async () => {
     try {
@@ -236,7 +258,34 @@ export default function MesRapports() {
 
             <div className="flex gap-4 mt-10">
               <button onClick={() => { setAddReport(false); setEditReport(null); }} className="flex-1 py-4 bg-slate-100 text-slate-500 font-black rounded-2xl text-xs uppercase tracking-widest">Annuler</button>
-              <button onClick={addReport ? handleAddReport : handleEditSave} className="flex-1 py-4 bg-emerald-600 text-white font-black rounded-2xl text-xs uppercase tracking-widest shadow-lg shadow-emerald-200">Confirmer</button>
+              {isSubmitting && uploadProgress > 0 && (
+                  <div className="col-span-2 space-y-2 mt-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase text-emerald-600">Téléchargement en cours...</span>
+                      <span className="text-[10px] font-black text-emerald-600">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-emerald-500 transition-all duration-300 ease-out"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              <button 
+                onClick={addReport ? handleAddReport : handleEditSave} 
+                disabled={isSubmitting}
+                className="flex-1 py-4 bg-emerald-600 text-white font-black rounded-2xl text-xs uppercase tracking-widest shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed transition-all"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    Traitement...
+                  </>
+                ) : (
+                  "Confirmer"
+                )}
+              </button>
             </div>
           </div>
         </div>

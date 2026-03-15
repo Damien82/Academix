@@ -282,9 +282,16 @@ const handleDownload = async (fileUrl, fileName) => {
               <button 
                 disabled={isSubmitting}
                 onClick={handleDelete} 
-                className="py-3.5 bg-rose-700 text-white font-bold rounded-xl text-sm shadow-sm flex items-center justify-center gap-2"
+                className="py-3.5 bg-rose-700 text-white font-bold rounded-xl text-sm shadow-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : "Supprimer"}
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="animate-spin" size={18} />
+                    Suppression...
+                  </>
+                ) : (
+                  "Supprimer"
+                )}
               </button>
             </div>
           </div>
@@ -332,9 +339,16 @@ const handleDownload = async (fileUrl, fileName) => {
                 <button 
                   disabled={isSubmitting}
                   onClick={handleEditSave} 
-                  className="flex-1 py-3.5 bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-sm flex items-center justify-center gap-2"
+                  className="flex-1 py-3.5 bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? <Loader2 className="animate-spin" size={16} /> : "Enregistrer"}
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="animate-spin" size={18} />
+                      Enregistrement...
+                    </>
+                  ) : (
+                    "Enregistrer"
+                  )}
                 </button>
               </div>
             </div>

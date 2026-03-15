@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Mail, Lock, Eye, EyeOff, LogIn, AlertCircle } from "lucide-react" // Ajout de AlertCircle
+import { Mail, Lock, Eye, EyeOff, LogIn, AlertCircle,Loader2 } from "lucide-react" // Ajout de AlertCircle
 import { useNavigate, Link, useLocation } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext" 
 
@@ -111,10 +111,13 @@ export default function Login() {
           <button 
             type="submit"
             disabled={isLoading}
-            className={`w-full bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-100 text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all active:scale-[0.97] ${isLoading ? 'opacity-70 cursor-not-allowed' : 'hover:-translate-y-0.5'}`}
+            className={`w-full bg-emerald-600 hover:bg-emerald-700 shadow-xl shadow-emerald-100 text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all active:scale-[0.97] ${isLoading ? 'opacity-80 cursor-not-allowed' : 'hover:-translate-y-0.5'}`}
           >
             {isLoading ? (
-              <div className="h-6 w-6 border-3 border-white/30 border-t-white rounded-full animate-spin" />
+              <>
+                <Loader2 className="animate-spin" size={22} />
+                Connexion en cours...
+              </>
             ) : (
               <>
                 <LogIn size={20} />
