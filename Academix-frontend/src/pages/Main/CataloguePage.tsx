@@ -1,8 +1,13 @@
-import { useState, useEffect } from "react"
-import { Search, FileText, BookOpen, GraduationCap, X, Menu, RotateCcw, ArrowRight, Download, Filter } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { 
+  Search, FileText, BookOpen, GraduationCap, RotateCcw, 
+  ArrowRight, Download, Hash, Loader2, AlertCircle, ChevronRight, X, Menu 
+} from "lucide-react"
 import { Link, useNavigate } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
+import axios from "axios"
 
+// --- INTERFACES ---
 interface DocumentItem {
   id: number;
   title: string;
@@ -10,30 +15,84 @@ interface DocumentItem {
   filiere: string;
   classe: string;
   langue: string;
-  encadrant: string;
+  encadrant?: string; // Optionnel car absent des cours
   type: string;
   author: string;
   tel: string;
+  fileUrl?: string;
+  _sourceRoute?: string;
 }
-
-const documentsData: DocumentItem[] = [
-  { id: 1, title: "Rapport de stage Academique", niveau: "Licence 3", filiere: "GL", classe: "GL3A", langue: "Français", encadrant: "encadrant 1", type: "Rapport de stage", author: "Alice", tel: "673720992" },
-  { id: 2, title: "Projet de classe", niveau: "Licence 2", filiere: "SR", classe: "L2F", langue: "Français", encadrant: "encadrant 2", type: "Rapport de projet", author: "Bob", tel: "673720992" },
-  { id: 3, title: "Course of Information Technology", niveau: "Licence 2", filiere: "SE", classe: "BA1A", langue: "Anglais", encadrant: "encadrant 3", type: "Cours", author: "Charles", tel: "673720992" },
-]
 
 export default function Catalogue() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [searchTerm, setSearchTerm] = useState("")
+
+  const [documents, setDocuments] = useState<DocumentItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
-  
+
+  const [searchTerm, setSearchTerm] = useState("")
   const [filters, setFilters] = useState({
-    niveau: "", filiere: "", classe: "", langue: "", encadrant: "", type: "", author: ""
+    niveau: "", filiere: "", classe: "", langue: "", encadrant: "", type: ""
   })
-  
-  const [filteredDocs, setFilteredDocs] = useState<DocumentItem[]>(documentsData)
+
+  const fetchDocuments = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const token = localStorage.getItem("token")
+      const config = {
+        params: { search: searchTerm, ...filters },
+        headers: { Authorization: `Bearer ${token}` }
+      }
+
+      const [reportsRes, coursesRes] = await Promise.all([
+        axios.get("http://localhost:5000/api/reports", config),
+        axios.get("http://localhost:5000/api/courses", config)
+      ])
+
+      const reportsData = reportsRes.data.reports || []
+      const coursesData = coursesRes.data.courses || []
+
+      const combinedData = [
+        ...reportsData.map((d: any) => ({ 
+          ...d, 
+          _sourceRoute: 'reports',
+          author: d.student || "Non spécifié",
+          encadrant: d.supervisor || d.encadrant || "Non spécifié", // Présent pour les rapports
+          type: "Rapport de projet",
+          niveau: d.niveau || "N/A",
+          filiere: d.filiere || "N/A",
+          classe: d.classe || "N/A",
+          tel: d.tel || ""
+        })),
+        ...coursesData.map((d: any) => ({ 
+          ...d, 
+          _sourceRoute: 'courses',
+          author: d.uploadedBy || d.author || "Enseignant",
+          // Pas d'encadrant ici
+          type: "Cours",
+          niveau: d.niveau || "N/A",
+          filiere: d.filiere || "N/A",
+          classe: d.classe || "N/A",
+          tel: d.tel || ""
+        }))
+      ]
+
+      setDocuments(combinedData.sort((a, b) => a.title.localeCompare(b.title)))
+      
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        setError("Session expirée. Veuillez vous reconnecter.")
+      } else {
+        setError("Erreur de synchronisation avec la bibliothèque.")
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [searchTerm, filters])
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20)
@@ -42,175 +101,235 @@ export default function Catalogue() {
   }, [])
 
   useEffect(() => {
-    let docs = [...documentsData]
-    if (searchTerm) {
-      docs = docs.filter((doc) => doc.title.toLowerCase().includes(searchTerm.toLowerCase()))
-    }
-    docs = docs.filter(doc => {
-      return Object.entries(filters).every(([key, value]) => {
-        if (!value) return true;
-        return doc[key as keyof DocumentItem] === value;
-      });
-    });
-    setFilteredDocs(docs)
-  }, [searchTerm, filters])
+    const handler = setTimeout(() => fetchDocuments(), 500)
+    return () => clearTimeout(handler)
+  }, [fetchDocuments])
 
   const handleDashboardRedirect = () => {
     if (!user) { navigate("/login"); return; }
     const role = user.role?.toLowerCase()
-    if (role === "admin") navigate("/dashboard/admin")
-    else if (role === "delegate") navigate("/dashboard/delegate")
-    else navigate("/dashboard/student")
+    navigate(role === "admin" ? "/dashboard/admin" : role === "delegate" ? "/dashboard/delegate" : "/dashboard/student")
+  }
+
+  const handleDownload = (doc: DocumentItem) => {
+    const route = doc._sourceRoute || (doc.type === "Cours" ? "courses" : "reports")
+    window.open(doc.fileUrl || `http://localhost:5000/api/${route}/download/${doc.id}`, "_blank")
   }
 
   const getDocStyle = (type: string) => {
     switch (type) {
-      case "Cours": return { icon: <BookOpen size={32} />, bg: "bg-blue-600/10 text-blue-600" }
-      case "Rapport de projet": return { icon: <GraduationCap size={32} />, bg: "bg-purple-600/10 text-purple-600" }
-      default: return { icon: <FileText size={32} />, bg: "bg-emerald-600/10 text-emerald-600" }
+      case "Cours": return { icon: <BookOpen size={28} />, bg: "bg-blue-50 text-blue-600 border-blue-100" }
+      case "Rapport de projet": return { icon: <GraduationCap size={28} />, bg: "bg-purple-50 text-purple-600 border-purple-100" }
+      default: return { icon: <FileText size={28} />, bg: "bg-emerald-50 text-emerald-600 border-emerald-100" }
     }
   }
 
   return (
-    <div className="bg-slate-50 min-h-screen font-sans selection:bg-emerald-100 selection:text-emerald-900">
-      
-      {/* Navbar */}
-      <nav className={`fixed w-full z-50 transition-all duration-300 ${
-        scrolled ? "bg-white/80 backdrop-blur-md py-3 shadow-sm border-b border-slate-100" : "bg-transparent py-5"
-      }`}>
+    <div className="bg-[#F8FAFC] min-h-screen font-sans selection:bg-emerald-100">
+      <nav className={`fixed w-full z-50 transition-all duration-300 ${scrolled ? "bg-white/80 backdrop-blur-md py-3 shadow-sm border-b border-slate-100" : "bg-transparent py-5"}`}>
         <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
-          <Link to="/" className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-200">
                <GraduationCap className="text-white" size={24} />
             </div>
-            <span className="text-2xl font-black tracking-tighter text-slate-900 uppercase">ACADEMIX</span>
-          </Link>
-
-          <div className="hidden md:flex items-center gap-8">
-            <Link to="/" className="text-sm font-bold text-slate-600 hover:text-emerald-600 transition-colors">Accueil</Link>
-            <Link to="/catalogue" className="text-sm font-bold text-emerald-600">Catalogue</Link>
-            <button onClick={handleDashboardRedirect} className="group relative px-6 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-xl transition-all hover:pr-10 active:scale-95">
+            <span className="text-2xl font-black tracking-tighter text-slate-900">ACADEMIX</span>
+          </div>
+          <div className="hidden md:flex items-center gap-10">
+            <div className="flex gap-8">
+              <a href="#home" className="text-sm font-bold text-slate-600 hover:text-emerald-600 transition-colors">Accueil</a>
+              <Link to="/catalogue" className="text-sm font-bold text-slate-600 hover:text-emerald-600 transition-colors">Catalogue</Link>
+            </div>
+            <button onClick={handleDashboardRedirect} className="group relative px-6 py-2.5 bg-slate-900 text-white text-sm font-bold rounded-xl overflow-hidden transition-all hover:pr-10 active:scale-95">
               <span className="relative z-10">{user ? "Mon Dashboard" : "Connexion"}</span>
               <ArrowRight className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all" size={16} />
             </button>
           </div>
+          <button className="md:hidden p-2 text-slate-900" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            {mobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
+          </button>
         </div>
       </nav>
 
-      {/* Header */}
-      <header className="relative pt-32 pb-16 bg-white border-b border-slate-100">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-widest mb-4">
-            <Filter size={12} /> Bibliothèque Numérique
+      <header className="relative pt-44 pb-20 bg-white overflow-hidden">
+        <div className="absolute top-0 right-0 w-1/3 h-full bg-emerald-50/50 -skew-x-12 translate-x-1/2" />
+        <div className="max-w-7xl mx-auto px-6 relative z-10">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-2xl text-[10px] font-black uppercase tracking-widest mb-6 border border-emerald-100">
+            <Hash size={12} /> {documents.length} Documents Indexés
           </div>
-          <h1 className="text-4xl md:text-6xl font-black text-slate-950 leading-[1.1] mb-4">Catalogue <span className="text-green-700">Digital</span></h1>
-          <p className="text-slate-500 font-medium max-w-xl">Recherchez et filtrez les ressources académiques archivées.</p>
+          <h1 className="text-5xl md:text-7xl font-black text-slate-950 leading-none mb-6">
+            Savoir <span className="text-emerald-600 text-shadow-sm">Digital.</span>
+          </h1>
+          <p className="text-slate-500 font-medium max-w-2xl text-lg leading-relaxed">
+            Accédez instantanément à la base de données académique : cours magistraux, rapports de stage et projets tutorés.
+          </p>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-12">
-        {/* Filtres */}
-        <div className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100 mb-12 space-y-6">
-          <div className="flex flex-col md:flex-row gap-4">
+      <main className="max-w-7xl mx-auto px-6 -mt-10 relative z-20 pb-20">
+        <div className="bg-white p-8 rounded-[40px] shadow-2xl shadow-slate-200/50 border border-slate-100 mb-16">
+          <div className="flex flex-col lg:flex-row gap-6 mb-8">
             <div className="flex-1 relative group">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-emerald-500 transition-colors" size={20} />
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={22} />
               <input
                 type="text"
-                placeholder="Rechercher par titre..."
+                placeholder="Rechercher un document, un auteur..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-6 py-4 bg-slate-50 border-transparent rounded-2xl focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none font-medium"
+                className="w-full pl-14 pr-6 py-5 bg-slate-50 border-none rounded-[24px] focus:bg-white focus:ring-4 focus:ring-emerald-500/5 transition-all outline-none font-bold text-slate-700 placeholder:text-slate-300"
               />
             </div>
-            <button 
-              onClick={() => {setFilters({niveau: "", filiere: "", classe: "", langue: "", encadrant: "", type: "", author: ""}); setSearchTerm("")}}
-              className="flex items-center justify-center gap-2 px-6 py-4 text-slate-500 hover:text-emerald-600 font-bold transition-all"
-            >
+            <button onClick={() => {setFilters({niveau: "", filiere: "", classe: "", langue: "", encadrant: "", type: ""}); setSearchTerm("")}}
+              className="flex items-center justify-center gap-3 px-8 py-5 text-slate-400 hover:text-rose-500 font-black text-[10px] uppercase tracking-widest transition-all hover:bg-rose-50 rounded-[24px]">
               <RotateCcw size={18} /> Réinitialiser
             </button>
           </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {[
               { name: "niveau", options: ["Licence 1", "Licence 2", "Licence 3"], label: "Niveau" },
               { name: "filiere", options: ["GL", "SR", "SE", "SN"], label: "Filière" },
               { name: "classe", options: ["L2F", "SR3C", "GL3A", "BA1A"], label: "Classe" },
-              { name: "encadrant", options: ["encadrant 1", "encadrant 2", "encadrant 3"], label: "Encadrant" },
+              { name: "encadrant", options: ["M. Tanon", "Dr. Kouassi", "Mme. Diallo"], label: "Encadrant" },
               { name: "langue", options: ["Français", "Anglais"], label: "Langue" },
               { name: "type", options: ["Cours", "Rapport de projet", "Rapport de stage"], label: "Type" },
             ].map((f) => (
-              <select
-                key={f.name}
-                name={f.name}
-                value={filters[f.name as keyof typeof filters]}
-                onChange={(e) => setFilters({...filters, [f.name]: e.target.value})}
-                className="w-full bg-slate-50 border border-slate-100 px-3 py-2.5 rounded-xl font-bold text-xs text-slate-600 focus:ring-2 focus:ring-emerald-500 transition-all outline-none"
-              >
-                <option value="">{f.label}</option>
-                {f.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-              </select>
+              <div key={f.name} className="relative group">
+                <select
+                  value={filters[f.name as keyof typeof filters]}
+                  onChange={(e) => setFilters({...filters, [f.name]: e.target.value})}
+                  className="w-full appearance-none bg-slate-50 border border-slate-100 px-5 py-4 rounded-2xl font-bold text-[10px] uppercase tracking-wider text-slate-600 focus:ring-2 focus:ring-emerald-500/20 outline-none cursor-pointer transition-all hover:bg-white"
+                >
+                  <option value="">{f.label}</option>
+                  {f.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+                <ChevronRight size={14} className="absolute right-4 top-1/2 -translate-y-1/2 rotate-90 text-slate-300 pointer-events-none" />
+              </div>
             ))}
           </div>
         </div>
 
-        {/* Liste avec TOUTES les informations respectées */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredDocs.length > 0 ? (
-            filteredDocs.map((doc) => {
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-40 animate-in fade-in duration-700">
+            <Loader2 className="text-emerald-500 animate-spin mb-6" size={48} />
+            <p className="text-slate-400 font-black uppercase text-[10px] tracking-[0.3em]">Synchronisation Base de données...</p>
+          </div>
+        ) : error ? (
+          <div className="bg-rose-50 border border-rose-100 p-16 rounded-[48px] text-center max-w-2xl mx-auto">
+            <AlertCircle className="text-rose-500 mx-auto mb-6" size={48} />
+            <p className="text-slate-500 font-medium mb-8">{error}</p>
+            <button onClick={fetchDocuments} className="px-10 py-5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl hover:bg-rose-600 transition-colors shadow-xl">Tenter une reconnexion</button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+            {documents.map((doc) => {
               const style = getDocStyle(doc.type);
               return (
-                <div key={doc.id} className="group bg-white rounded-[40px] border border-slate-100 p-8 hover:border-emerald-200 hover:shadow-2xl transition-all duration-500 flex flex-col">
-                  <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-8 transform group-hover:scale-110 transition-transform ${style.bg}`}>
+                <div key={`${doc._sourceRoute}-${doc.id}`} className="group bg-white rounded-[48px] border border-slate-100 p-10 hover:shadow-3xl hover:shadow-emerald-200/20 hover:-translate-y-2 transition-all duration-500 flex flex-col">
+                  <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-10 border transition-all duration-500 group-hover:rotate-6 ${style.bg}`}>
                     {style.icon}
                   </div>
-                  
-                  <h3 className="text-xl font-black text-slate-950 mb-6 leading-snug">{doc.title}</h3>
+                  <h3 className="text-2xl font-black text-slate-900 mb-8 leading-tight group-hover:text-emerald-600 transition-colors h-16 overflow-hidden line-clamp-2">{doc.title}</h3>
 
-                  <div className="grid grid-cols-2 gap-y-4 gap-x-2 mb-8 border-t border-slate-50 pt-6">
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Auteur</p>
-                      <p className="text-sm font-bold text-slate-700">{doc.author}</p>
+                  <div className="space-y-5 mb-10 border-t border-slate-50 pt-8">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Auteur</span>
+                      <span className="text-sm font-black text-slate-700">{doc.author}</span>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Téléphone</p>
-                      <p className="text-sm font-bold text-slate-700">{doc.tel}</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Classe / Filière</span>
+                      <div className="flex items-center gap-2">
+                         <span className="text-xs font-bold text-slate-500">{doc.classe}</span>
+                         <div className="w-1 h-1 bg-emerald-300 rounded-full" />
+                         <span className="text-xs font-black text-emerald-600">{doc.filiere}</span>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Encadrant</p>
-                      <p className="text-sm font-bold text-slate-700">{doc.encadrant}</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Niveau</span>
+                      <span className="text-xs font-bold text-slate-600">{doc.niveau}</span>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Classe</p>
-                      <p className="text-sm font-bold text-slate-700">{doc.classe}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Filière</p>
-                      <p className="text-sm font-bold text-slate-700">{doc.filiere}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Niveau</p>
-                      <p className="text-sm font-bold text-slate-700">{doc.niveau}</p>
-                    </div>
+
+                    {/* --- LOGIQUE ENCADRANT EXCLUSIVE --- */}
+                    {doc.type === "Rapport de projet" && doc.encadrant && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Encadrant</span>
+                        <span className="text-xs font-bold text-slate-600">{doc.encadrant}</span>
+                      </div>
+                    )}
+
+                    {doc.tel && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contact</span>
+                        <span className="text-xs font-bold text-slate-500">{doc.tel}</span>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="mt-auto pt-4 space-y-3">
-                    <div className="inline-flex px-3 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase rounded-lg">
-                      {doc.type} | {doc.langue}
+                  <div className="mt-auto space-y-4">
+                    <div className="flex items-center gap-2">
+                       <span className="px-3 py-1 bg-slate-100 text-slate-500 text-[9px] font-black uppercase rounded-lg tracking-tighter">{doc.type}</span>
+                       <span className={`px-3 py-1 text-[9px] font-black uppercase rounded-lg tracking-tighter ${doc.langue === 'Français' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>{doc.langue}</span>
                     </div>
-                    <button className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-slate-900 text-white font-black rounded-2xl hover:bg-emerald-600 transition-all active:scale-95 shadow-lg">
-                      <Download size={18} /> Télécharger
+                    <button onClick={() => handleDownload(doc)} className="w-full flex items-center justify-center gap-3 px-8 py-5 bg-slate-900 text-white text-[10px] font-black uppercase tracking-[0.2em] rounded-2xl hover:bg-emerald-600 transition-all active:scale-95 shadow-xl shadow-slate-200 group/btn">
+                      <Download size={18} className="group-hover/btn:animate-bounce" /> Télécharger PDF
                     </button>
                   </div>
                 </div>
               )
-            })
-          ) : (
-            <div className="col-span-full py-20 bg-white rounded-[40px] border border-dashed border-slate-200 text-center">
-               <p className="text-slate-500 font-bold">Aucun document trouvé.</p>
-            </div>
-          )}
-        </div>
+            })}
+          </div>
+        )}
       </main>
+
+      <footer className="bg-white border-t border-slate-100 pt-20 pb-10 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+            <div className="col-span-1 md:col-span-2 space-y-6">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center"><GraduationCap className="text-white" size={18} /></div>
+                <span className="text-xl font-black tracking-tighter">ACADEMIX</span>
+              </div>
+              <p className="text-slate-500 font-medium max-w-sm">Simplifier l'accès à la connaissance et optimiser la gestion administrative.</p>
+            </div>
+            <div>
+              <h5 className="font-black text-slate-950 mb-6">Plateforme</h5>
+              <ul className="space-y-4 text-sm font-bold text-slate-500">
+                <li><Link to="/catalogue" className="hover:text-emerald-600 transition-colors">Catalogue</Link></li>
+                <li><a href="#" className="hover:text-emerald-600 transition-colors">Cours</a></li>
+                <li><a href="#" className="hover:text-emerald-600 transition-colors">Rapports</a></li>
+              </ul>
+            </div>
+            <div>
+              <h5 className="font-black text-slate-950 mb-6">Support</h5>
+              <ul className="space-y-4 text-sm font-bold text-slate-500">
+                <li><a href="#" className="hover:text-emerald-600 transition-colors">Aide</a></li>
+                <li><a href="#" className="hover:text-emerald-600 transition-colors">Contact</a></li>
+              </ul>
+            </div>
+          </div>
+          <div className="pt-8 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-4">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">&copy; {new Date().getFullYear()} Omniflex. Built for excellence.</p>
+            <div className="flex gap-6 text-xs font-bold text-slate-400 uppercase tracking-widest">
+               <a href="#" className="hover:text-slate-900 transition-colors">Confidentialité</a>
+               <a href="#" className="hover:text-slate-900 transition-colors">CGU</a>
+            </div>
+          </div>
+        </div>
+      </footer>
+
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-[60] bg-white p-6 flex flex-col animate-in slide-in-from-top duration-300">
+          <div className="flex justify-between items-center mb-12">
+            <span className="text-xl font-black tracking-tighter">ACADEMIX</span>
+            <button onClick={() => setMobileMenuOpen(false)} className="p-2 bg-slate-100 rounded-full"><X size={24} /></button>
+          </div>
+          <div className="flex flex-col gap-8 text-center">
+            <a href="#home" onClick={() => setMobileMenuOpen(false)} className="text-3xl font-black text-slate-900">Accueil</a>
+            <Link to="/catalogue" onClick={() => setMobileMenuOpen(false)} className="text-3xl font-black text-slate-900">Catalogue</Link>
+            <button onClick={() => { setMobileMenuOpen(false); handleDashboardRedirect(); }} className="mt-4 px-8 py-5 bg-emerald-600 text-white font-black rounded-2xl shadow-xl text-2xl active:scale-95">
+              {user ? "Dashboard" : "Connexion"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
