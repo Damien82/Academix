@@ -4,8 +4,13 @@ import EleveSidebar from "../../../components/dashboard/EleveSidebar"
 import EleveTopbar from "../../../components/dashboard/EleveTopbar"
 import { 
   FileText, Edit, Trash2, X, Plus, Eye, 
-  Search, Calendar, UserCheck, UploadCloud, Loader2, AlertCircle, CheckCircle2
+  Search, Calendar, UserCheck, UploadCloud, Loader2, AlertCircle, CheckCircle2, ChevronDown
 } from "lucide-react"
+
+// --- CONSTANTES DE CONFIGURATION ---
+const LISTE_FILIERES = ["GL", "SRIT", "DATA", "RSI", "AGE"]
+const LISTE_NIVEAUX = ["L1", "L2", "L3", "M1", "M2"]
+const LISTE_CLASSES = ["Classe A", "Classe B", "Classe C"]
 
 export default function MesRapports() {
   // --- ÉTATS ---
@@ -21,20 +26,55 @@ export default function MesRapports() {
   const [editReport, setEditReport] = useState(null)
   const [deleteReport, setDeleteReport] = useState(null)
 
-  // Formulaire
-  const [formValues, setFormValues] = useState({ 
-    title: "", supervisor: "", classe: "", filiere: "GL", niveau: "L3", date: "", language: "Français", tel: "673730091" 
-  })
+  // Formulaire (Valeurs par défaut)
+  const defaultForm = { 
+    title: "", student: "", supervisor: "", classe: "", 
+    filiere: "GL", niveau: "L3", date: new Date().toISOString().split('T')[0], 
+    language: "Français", tel: "673730091" 
+  }
+  const [formValues, setFormValues] = useState(defaultForm)
   const [selectedFile, setSelectedFile] = useState(null)
 
   const API_URL = "https://academix-i3qb.onrender.com/api/reports"
   const token = localStorage.getItem('token')
 
-  // --- LOGIQUE API ---
+  // --- LOGIQUE DE GESTION ---
+
   const showStatus = (type, msg) => {
     setStatus({ type, msg })
     setTimeout(() => setStatus({ type: "", msg: "" }), 4000)
   }
+
+  const resetForm = () => {
+    setFormValues(defaultForm)
+    setSelectedFile(null)
+  }
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target
+    setFormValues(prev => ({ ...prev, [name]: value }))
+  }
+
+  // Synchronisation du formulaire pour l'édition
+  useEffect(() => {
+    if (editReport) {
+      setFormValues({
+        title: editReport.title || "",
+        student: editReport.student || "",
+        supervisor: editReport.supervisor || "",
+        filiere: editReport.filiere || "GL",
+        niveau: editReport.niveau || "L3",
+        classe: editReport.classe || "",
+        language: editReport.language || "Français",
+        tel: editReport.tel || "673730091",
+        date: editReport.date || ""
+      })
+    } else {
+      resetForm()
+    }
+  }, [editReport])
+
+  // --- ACTIONS API ---
 
   const fetchReports = async () => {
     try {
@@ -50,51 +90,38 @@ export default function MesRapports() {
 
   useEffect(() => { fetchReports() }, [])
 
- const handleAddReport = async () => {
-  if (!formValues.title || !selectedFile) return showStatus("error", "Le titre et le PDF sont obligatoires")
-  
-  // Validation du poids (10 Mo max)
-  if (selectedFile.size > 10 * 1024 * 1024) {
-    return showStatus("error", "Le fichier est trop volumineux (max 10 Mo)")
-  }
+  const handleAddReport = async () => {
+    if (!formValues.title || !selectedFile) return showStatus("error", "Titre et PDF obligatoires")
+    if (selectedFile.size > 10 * 1024 * 1024) return showStatus("error", "Fichier trop lourd (max 10Mo)")
 
-  try {
-    setIsSubmitting(true)
-    setUploadProgress(0) // Réinitialisation
+    try {
+      setIsSubmitting(true)
+      const formData = new FormData()
+      Object.keys(formValues).forEach(key => formData.append(key, formValues[key]))
+      formData.append("file", selectedFile)
 
-    const formData = new FormData()
-    Object.keys(formValues).forEach(key => formData.append(key, formValues[key]))
-    formData.append("file", selectedFile)
+      const res = await axios.post(`${API_URL}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data', Authorization: `Bearer ${token}` },
+        onUploadProgress: (p) => setUploadProgress(Math.round((p.loaded * 100) / p.total))
+      })
 
-    const res = await axios.post(`${API_URL}/upload`, formData, {
-      headers: { 
-        'Content-Type': 'multipart/form-data', 
-        Authorization: `Bearer ${token}` 
-      },
-      onUploadProgress: (progressEvent) => {
-        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-        setUploadProgress(percentCompleted)
+      if (res.data.success) {
+        setReports([res.data.report, ...reports])
+        setAddReport(false)
+        showStatus("success", "Rapport soumis avec succès")
       }
-    })
-
-    if (res.data.success) {
-      setReports([res.data.report, ...reports])
-      setAddReport(false)
-      resetForm()
-      showStatus("success", "Rapport soumis avec succès")
+    } catch (err) {
+      showStatus("error", err.response?.data?.message || "Échec de l'envoi")
+    } finally {
+      setIsSubmitting(false)
+      setUploadProgress(0)
     }
-  } catch (err) {
-    const errorMsg = err.response?.data?.message || "Échec de l'envoi"
-    showStatus("error", errorMsg)
-  } finally {
-    setIsSubmitting(false)
-    setUploadProgress(0)
   }
-}
 
   const handleEditSave = async () => {
     try {
-      const res = await axios.patch(`${API_URL}/${editReport._id}`, editReport, {
+      setIsSubmitting(true)
+      const res = await axios.patch(`${API_URL}/${editReport._id}`, formValues, {
         headers: { Authorization: `Bearer ${token}` }
       })
       setReports(reports.map(r => r._id === editReport._id ? res.data.report : r))
@@ -102,23 +129,23 @@ export default function MesRapports() {
       showStatus("success", "Mise à jour réussie")
     } catch (err) {
       showStatus("error", "Erreur de modification")
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   const handleDelete = async () => {
     try {
+      setIsSubmitting(true)
       await axios.delete(`${API_URL}/${deleteReport._id}`, { headers: { Authorization: `Bearer ${token}` } })
       setReports(reports.filter(r => r._id !== deleteReport._id))
       setDeleteReport(null)
       showStatus("success", "Rapport supprimé")
     } catch (err) {
       showStatus("error", "Action impossible")
+    } finally {
+      setIsSubmitting(false)
     }
-  }
-
-  const resetForm = () => {
-    setFormValues({ title: "", supervisor: "", classe: "", filiere: "GL", niveau: "L3", date: "", language: "Français", tel: "673730091" })
-    setSelectedFile(null)
   }
 
   const filteredReports = reports.filter(r => 
@@ -142,6 +169,7 @@ export default function MesRapports() {
           )}
 
           <div className="max-w-full mx-auto space-y-10">
+            {/* HEADER */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[32px] shadow-sm border border-slate-100">
               <div>
                 <h2 className="text-3xl font-black text-slate-950 tracking-tight">Mes Rapports</h2>
@@ -158,6 +186,7 @@ export default function MesRapports() {
               </div>
             </div>
 
+            {/* TABLEAU */}
             <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[1000px]">
@@ -217,74 +246,105 @@ export default function MesRapports() {
       {/* MODAL AJOUT / MODIF */}
       {(addReport || editReport) && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => { setAddReport(false); setEditReport(null); }} />
-          <div className="relative bg-white rounded-[32px] w-full max-w-lg p-10 shadow-2xl border border-slate-100 animate-in zoom-in duration-200 overflow-y-auto max-h-[90vh]">
-            <h3 className="text-2xl font-black text-slate-900 mb-8">{addReport ? "Soumettre un rapport" : "Modifier le rapport"}</h3>
+          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-md" onClick={() => { setAddReport(false); setEditReport(null); }} />
+          <div className="relative bg-white rounded-[32px] w-full max-w-lg flex flex-col max-h-[90vh] shadow-2xl border border-slate-100 animate-in zoom-in duration-300 overflow-hidden">
             
-            <div className="grid grid-cols-2 gap-5">
-              <div className="col-span-2 space-y-1.5">
-                <label className="text-[10px] font-black uppercase text-slate-400">Titre du document</label>
-                <input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold focus:border-emerald-500" value={addReport ? formValues.title : editReport.title} onChange={(e) => addReport ? setFormValues({...formValues, title: e.target.value}) : setEditReport({...editReport, title: e.target.value})} />
-              </div>
-
-              <div className="col-span-2 space-y-1.5">
-                <label className="text-[10px] font-black uppercase text-slate-400">Encadrant (Superviseur)</label>
-                <input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold focus:border-emerald-500" value={addReport ? formValues.supervisor : editReport.supervisor} onChange={(e) => addReport ? setFormValues({...formValues, supervisor: e.target.value}) : setEditReport({...editReport, supervisor: e.target.value})} />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase text-slate-400">Niveau</label>
-                <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold cursor-pointer" value={addReport ? formValues.niveau : editReport.niveau} onChange={(e) => addReport ? setFormValues({...formValues, niveau: e.target.value}) : setEditReport({...editReport, niveau: e.target.value})}>
-                  <option value="L1">L1</option><option value="L2">L2</option><option value="L3">L3</option><option value="M1">M1</option><option value="M2">M2</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black uppercase text-slate-400">Date de dépôt</label>
-                <input type="date" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl outline-none font-bold" value={addReport ? formValues.date : editReport.date} onChange={(e) => addReport ? setFormValues({...formValues, date: e.target.value}) : setEditReport({...editReport, date: e.target.value})} />
-              </div>
-
-              {addReport && (
-                <div className="col-span-2 space-y-1.5 pt-4">
-                  <label className="text-[10px] font-black uppercase text-slate-400">Fichier PDF</label>
-                  <div className="relative w-full py-8 border-2 border-dashed border-emerald-200 bg-emerald-50 rounded-2xl flex flex-col items-center justify-center gap-2 text-emerald-600 cursor-pointer">
-                    <UploadCloud size={24} />
-                    <span className="text-[10px] font-black uppercase">{selectedFile ? selectedFile.name : "Choisir le PDF"}</span>
-                    <input type="file" accept=".pdf" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => setSelectedFile(e.target.files[0])} />
-                  </div>
-                </div>
-              )}
+            <div className="p-8 pb-4">
+              <h3 className="text-2xl font-black text-slate-950 tracking-tight">
+                {addReport ? "Nouveau Rapport" : "Modifier Rapport"}
+              </h3>
             </div>
 
-            <div className="flex gap-4 mt-10">
-              <button onClick={() => { setAddReport(false); setEditReport(null); }} className="flex-1 py-4 bg-slate-100 text-slate-500 font-black rounded-2xl text-xs uppercase tracking-widest">Annuler</button>
-              {isSubmitting && uploadProgress > 0 && (
-                  <div className="col-span-2 space-y-2 mt-4">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-black uppercase text-emerald-600">Téléchargement en cours...</span>
-                      <span className="text-[10px] font-black text-emerald-600">{uploadProgress}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-emerald-500 transition-all duration-300 ease-out"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
+            <div className="flex-1 overflow-y-auto p-8 pt-0 scrollbar-thin scrollbar-thumb-slate-200">
+              <div className="grid grid-cols-2 gap-5">
+                <div className="col-span-2 space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Titre du rapport</label>
+                  <input type="text" name="title" value={formValues.title} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500 transition-all" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Étudiant</label>
+                  <input type="text" name="student" value={formValues.student} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-800" />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Téléphone</label>
+                  <input type="text" name="tel" value={formValues.tel} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-800" />
+                </div>
+
+                <div className="col-span-2 space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Encadrant (Superviseur)</label>
+                  <input type="text" name="supervisor" value={formValues.supervisor} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-800 focus:ring-2 focus:ring-emerald-500" />
+                </div>
+
+                <div className="space-y-1.5 relative">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Filière</label>
+                  <select name="filiere" value={formValues.filiere} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-800 appearance-none cursor-pointer focus:ring-2 focus:ring-emerald-500">
+                    {LISTE_FILIERES.map(f => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-4 top-11 text-slate-400 pointer-events-none" size={16} />
+                </div>
+
+                <div className="space-y-1.5 relative">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Niveau</label>
+                  <select name="niveau" value={formValues.niveau} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-800 appearance-none cursor-pointer focus:ring-2 focus:ring-emerald-500">
+                    {LISTE_NIVEAUX.map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-4 top-11 text-slate-400 pointer-events-none" size={16} />
+                </div>
+
+                <div className="col-span-2 space-y-1.5 relative">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Classe</label>
+                  <select name="classe" value={formValues.classe} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-800 appearance-none cursor-pointer focus:ring-2 focus:ring-emerald-500">
+                    <option value="">Sélectionner une classe</option>
+                    {LISTE_CLASSES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <ChevronDown className="absolute right-4 top-11 text-slate-400 pointer-events-none" size={16} />
+                </div>
+
+                <div className="col-span-2 space-y-1.5">
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Langue</label>
+                  <select name="language" value={formValues.language} onChange={handleFormChange} className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-800 appearance-none cursor-pointer">
+                    <option value="Français">Français</option>
+                    <option value="Anglais">Anglais</option>
+                  </select>
+                </div>
+
+                {addReport && (
+                  <div className="col-span-2 space-y-1.5">
+                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider ml-1">Document (PDF)</label>
+                    <div className="relative w-full py-8 px-5 bg-emerald-50 border-2 border-dashed border-emerald-200 rounded-[24px] flex flex-col items-center justify-center gap-2 text-emerald-600 font-bold cursor-pointer hover:bg-emerald-100 transition-all">
+                      <UploadCloud size={32} />
+                      <span className="text-[10px] font-black uppercase tracking-tighter text-center">
+                        {selectedFile ? selectedFile.name : "Sélectionner le fichier PDF"}
+                      </span>
+                      <input type="file" accept=".pdf" onChange={(e) => setSelectedFile(e.target.files[0])} className="absolute inset-0 opacity-0 cursor-pointer" />
                     </div>
                   </div>
                 )}
+
+                {isSubmitting && uploadProgress > 0 && (
+                  <div className="col-span-2 space-y-2 py-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-black uppercase text-emerald-600">Upload en cours...</span>
+                      <span className="text-[10px] font-black text-emerald-600">{uploadProgress}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-emerald-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-8 bg-white border-t border-slate-50 flex gap-4">
+              <button onClick={() => { setAddReport(false); setEditReport(null); }} className="flex-1 py-4 bg-slate-100 text-slate-500 font-black rounded-2xl text-[11px] uppercase tracking-widest hover:bg-slate-200 transition-all">Annuler</button>
               <button 
                 onClick={addReport ? handleAddReport : handleEditSave} 
                 disabled={isSubmitting}
-                className="flex-1 py-4 bg-emerald-600 text-white font-black rounded-2xl text-xs uppercase tracking-widest shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed transition-all"
+                className="flex-1 py-4 bg-emerald-600 text-white font-black rounded-2xl text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    Traitement...
-                  </>
-                ) : (
-                  "Confirmer"
-                )}
+                {isSubmitting ? <><Loader2 size={16} className="animate-spin" /> Envoi...</> : "Confirmer"}
               </button>
             </div>
           </div>
@@ -303,7 +363,9 @@ export default function MesRapports() {
             <p className="text-slate-500 text-sm mb-10 italic">"{deleteReport.title}"</p>
             <div className="grid grid-cols-2 gap-4">
               <button onClick={() => setDeleteReport(null)} className="py-4 bg-slate-100 text-slate-500 font-black rounded-2xl text-xs uppercase">Non</button>
-              <button onClick={handleDelete} className="py-4 bg-rose-600 text-white font-black rounded-2xl text-xs uppercase shadow-lg shadow-rose-200">Supprimer</button>
+              <button onClick={handleDelete} disabled={isSubmitting} className="py-4 bg-rose-600 text-white font-black rounded-2xl text-xs uppercase shadow-lg shadow-rose-200 disabled:opacity-50">
+                {isSubmitting ? "..." : "Supprimer"}
+              </button>
             </div>
           </div>
         </div>
